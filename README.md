@@ -139,8 +139,11 @@ Run `tools\da <command>` (Windows) or `uv run python tools/da.py <command>`.
    targeted rip, `Live2DOutput` for any **new** models (auto-detected from the cache), the
    Unity models, and Unity setup. Add `--no-rip` for a content-only patch (no new characters).
 3. Rebuild players: `da unity android` (APK) and/or `da unity windows` (desktop).
-4. Deploy to device: copy `data/bundles/` + `data/extracted/audio/` (+`cue_index.json`) +
-   `data/extracted/images/` to the app's files folder on the device.
+4. Deploy to device: put `data/bundles/` + `data/extracted/audio/` (+`cue_index.json`) +
+   `data/extracted/images/` in a folder named `dotabyss_extracted` on the device. It can go
+   anywhere the app can read — the app-specific folder (`Android/data/<pkg>/files`), or an
+   easier-to-reach public folder like `Download/dotabyss_extracted`. Then point the player at
+   it in-app (see the folder picker under **Notes**); common locations are auto-detected.
 
 `da dump` (Cpp2IL) is only needed when the game's **code** changed; content updates don't.
 
@@ -162,6 +165,14 @@ decoder by file extension (OGG/WAV).
 - A **Lite (performance)** toggle (behind ☰) trades the cinematic look for speed — it drops
   bloom and lowers the render scale. It defaults to **Lite on mobile / Full on desktop** and
   the choice is remembered per device. Use Lite on low-end Android for a smoother experience.
+- **Assets folder** (behind ☰): choose where the `dotabyss_extracted` data (audio + bundles)
+  lives. The picker lists auto-detected folders (on Android: `Download/`, `Documents/`, the
+  sdcard root, and the app-specific folder); or type/paste a custom path and press **Apply**.
+  The choice is remembered per device (`DAConfig` → `PlayerPrefs`), so you no longer have to
+  drop files into the hard-to-reach `Android/data/<pkg>/files` folder. On Android 11+, tap
+  **Grant storage access** once (opens the system "All files access" page) so the app can read
+  public folders; **Reset** returns to auto-detection. `scenes.json` ships inside the APK, so
+  scene playback works even before you point at a data folder.
 - See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the pipeline overview,
   [`docs/behavior_spec.md`](docs/behavior_spec.md) for the reverse-engineered playback behavior,
   and [`docs/history/TASKS.md`](docs/history/TASKS.md) for the build log.

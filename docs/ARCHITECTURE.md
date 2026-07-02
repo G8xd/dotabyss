@@ -72,7 +72,9 @@ Runtime and editor code are deliberately separated:
   - `AdvPlayer` + `AdvData` — the ADV scenario interpreter (`model/motion/say/wait/bgm/…`).
   - `AudioRouter`, `CueIndex` — resolve and play cues (OGG/WAV by extension).
   - `ScenesDb`, `ModelRegistry`, `ModelBundles` — data lookups + runtime bundle loading.
-  - `DAConfig` — resolves asset roots on device/desktop.
+  - `DAConfig` — resolves the asset root on device/desktop: a user-chosen folder (saved in
+    `PlayerPrefs` via the in-app ☰ → "Assets folder" picker) wins, then a `da_assets.txt`
+    override, then auto-detection of the usual spots, then a platform default.
 - **`unity/Assets/Editor/`** — editor-only build tooling, never in a build:
   - `DA_Build` — build entry points (`FullSetup`, `BuildWindows`, `BuildAndroid`,
     `WinBundleTest`) invoked by `da unity <step>`.

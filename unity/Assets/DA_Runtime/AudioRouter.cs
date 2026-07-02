@@ -25,6 +25,17 @@ namespace DA
             se = MakeSource("SE", false, 0.9f);
         }
 
+        /// <summary>
+        /// Swap the cue index after the asset root changed. Stops playback and clears the clip cache
+        /// (old clips point at the previous folder) without re-creating the audio sources.
+        /// </summary>
+        public void SetCues(CueIndex cues)
+        {
+            StopAll();
+            _cache.Clear();
+            _cues = cues;
+        }
+
         private AudioSource MakeSource(string name, bool loop, float vol)
         {
             var go = new GameObject(name);

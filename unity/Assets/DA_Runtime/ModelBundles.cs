@@ -19,6 +19,19 @@ namespace DA
         private static string Dir => DAConfig.BundlesDir;
         public static bool Available => Directory.Exists(Dir);
 
+        /// <summary>
+        /// Drop every loaded bundle + the cached manifest so the next load re-reads from the current
+        /// <see cref="DAConfig.BundlesDir"/>. Call after the asset root changes (the caller must release
+        /// any instantiated prefab first — Unload(true) frees the assets those instances reference).
+        /// </summary>
+        public static void Reset()
+        {
+            foreach (var b in _cache.Values) if (b != null) b.Unload(true);
+            _cache.Clear();
+            _manifest = null;
+            _manifestTried = false;
+        }
+
         private static AssetBundleManifest Manifest()
         {
             if (_manifestTried) return _manifest;

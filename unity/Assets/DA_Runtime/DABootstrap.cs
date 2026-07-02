@@ -31,6 +31,10 @@ namespace DA
         private AdvPlayer _player;
 
         private DAPicker _modelPick, _scenePick, _motionPick;
+        private DAPicker _assetPick;                 // "Assets folder" selector (detected roots)
+        private InputField _assetField;              // custom asset-root path entry
+        private Text _assetRootLabel;                // shows the active asset root
+        private readonly List<string> _assetPaths = new List<string>();   // picker row -> full path
         private Text _sayWho, _sayText, _status;
         private Toggle _mosaicTg, _aspectTg, _liteTg;
         private bool _autoOn = true;
@@ -108,7 +112,16 @@ namespace DA
             var tm = Environment.GetEnvironmentVariable("DA_TEST_MODEL");   // load a specific model at default (closed-mouth) pose
             if (!string.IsNullOrEmpty(tm) && _modelNames.Contains(tm)) LoadModel(tm);
             else if (_modelNames.Count > 0) LoadModel(_modelNames[0]);
+            RefreshAssetPicker();
             SetStatus($"ready · models={_registry.entries.Count} · scenes={_scenes.items.Count} · cues={_cues.Count}");
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // Older Android (<11): ask for read access up front so the public folders are scannable.
+            // On 11+ the user grants "All files access" via the ☰ → Assets folder → Grant button.
+            if (AndroidSdk() < 30 && !UnityEngine.Android.Permission.HasUserAuthorizedPermission(
+                    UnityEngine.Android.Permission.ExternalStorageRead))
+                UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.ExternalStorageRead);
+#endif
 
             var ts = Environment.GetEnvironmentVariable("DA_TEST_SCENE");
             if (!string.IsNullOrEmpty(ts) && int.TryParse(ts, out var si) && _scenes.items.Count > 0)
@@ -224,6 +237,136 @@ namespace DA
             _player.Play(sc);
             SetStatus($"scene: {SceneCharName(sc)}  ·  {sc.id} ({sc.model}) · {sc.steps.Count} steps");
         }
+
+        // ---------- assets folder selection ----------
+        // Rebuild the picker: current active root first, then the auto-detected candidates, each tagged
+        // so it's obvious which actually contain data. Row -> full path is kept in _assetPaths.
+        private void RefreshAssetPicker()
+        {
+            if (_assetPick == null) return;
+            _assetPaths.Clear();
+            var opts = new List<string>();
+            void AddPath(string p)
+            {
+                if (string.IsNullOrEmpty(p) || _assetPaths.Contains(p)) return;
+                _assetPaths.Add(p);
+                string tag = !Directory.Exists(p) ? "  (missing)"
+                           : DAConfig.LooksLikeAssetRoot(p) ? "  ✓" : "  (no data?)";
+                opts.Add(ShortPath(p) + tag);
+            }
+            AddPath(DAConfig.AssetRoot);                                 // whatever is active now
+            foreach (var c in DAConfig.AutoCandidates()) AddPath(c);     // likely/detected spots
+            _assetPick.SetOptions(opts);
+            int cur = _assetPaths.IndexOf(DAConfig.AssetRoot);
+            if (cur >= 0) _assetPick.SetValueWithoutNotify(cur);
+            if (_assetRootLabel != null)
+                _assetRootLabel.text = DAConfig.AssetRoot +
+                    (DAConfig.LooksLikeAssetRoot(DAConfig.AssetRoot) ? "  ✓" : "  (no data found here)");
+            if (_assetField != null) _assetField.text = DAConfig.SavedOverride;
+        }
+
+        private void ApplyAssetChoice(int i)
+        {
+            if (i >= 0 && i < _assetPaths.Count) ApplyAssetPath(_assetPaths[i]);
+        }
+
+        private void ApplyAssetPath(string path)
+        {
+            path = (path ?? "").Trim();
+            if (string.IsNullOrEmpty(path)) { SetStatus("enter a folder path first"); return; }
+            if (!Directory.Exists(path)) { SetStatus("folder not found: " + path); RefreshAssetPicker(); return; }
+            DAConfig.SetAssetRoot(path);
+            ReloadAfterRootChange();
+            SetStatus((DAConfig.LooksLikeAssetRoot(path) ? "assets folder: " : "set (no data found in) ") + DAConfig.AssetRoot);
+        }
+
+        private void ResetAssetRoot()
+        {
+            DAConfig.ClearOverride();
+            ReloadAfterRootChange();
+            SetStatus("assets folder reset → " + DAConfig.AssetRoot);
+        }
+
+        // Re-run everything that reads from the asset root, keeping the current model if it still exists.
+        private void ReloadAfterRootChange()
+        {
+            var keep = _stage != null ? _stage.CurrentModel : null;
+            if (_player != null) _player.Stop();
+            if (_stage != null) _stage.Release();
+            ModelBundles.Reset();                       // drop bundles loaded from the old folder
+            _cues = CueIndex.Load();                    // re-read cue_index.json from the new folder
+            if (_audio != null) _audio.SetCues(_cues);
+            if (!string.IsNullOrEmpty(keep)) LoadModel(keep);
+            else if (_modelNames.Count > 0) LoadModel(_modelNames[0]);
+            RefreshAssetPicker();
+        }
+
+        // Last path segment (+ its parent) so long Android paths stay readable in the narrow picker.
+        private static string ShortPath(string p)
+        {
+            if (string.IsNullOrEmpty(p)) return "";
+            p = p.Replace('\\', '/').TrimEnd('/');
+            int a = p.LastIndexOf('/');
+            if (a <= 0) return p;
+            int b = p.LastIndexOf('/', a - 1);
+            return "…/" + p.Substring(b + 1);
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private static int AndroidSdk()
+        {
+            try { using var v = new AndroidJavaClass("android.os.Build$VERSION"); return v.GetStatic<int>("SDK_INT"); }
+            catch { return 0; }
+        }
+
+        // True once the app can read arbitrary user folders (Android 11+ = "All files access";
+        // older = the runtime read-storage permission).
+        private static bool HasStorageAccess()
+        {
+            try
+            {
+                if (AndroidSdk() >= 30)
+                {
+                    using var env = new AndroidJavaClass("android.os.Environment");
+                    return env.CallStatic<bool>("isExternalStorageManager");
+                }
+                return UnityEngine.Android.Permission.HasUserAuthorizedPermission(
+                    UnityEngine.Android.Permission.ExternalStorageRead);
+            }
+            catch { return false; }
+        }
+
+        // Android 11+: open this app's "All files access" settings page (the only way to read arbitrary
+        // user folders). Older: show the runtime read-permission dialog.
+        private void RequestStorageAccess()
+        {
+            if (HasStorageAccess()) { SetStatus("storage access already granted"); RefreshAssetPicker(); return; }
+            try
+            {
+                if (AndroidSdk() >= 30)
+                {
+                    using var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                    using var activity = up.GetStatic<AndroidJavaObject>("currentActivity");
+                    using var uriClass = new AndroidJavaClass("android.net.Uri");
+                    using var uri = uriClass.CallStatic<AndroidJavaObject>("parse", "package:" + Application.identifier);
+                    using var intent = new AndroidJavaObject("android.content.Intent",
+                        "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION", uri);
+                    activity.Call("startActivity", intent);
+                    SetStatus("grant 'All files access', then pick your folder");
+                }
+                else
+                {
+                    UnityEngine.Android.Permission.RequestUserPermission(
+                        UnityEngine.Android.Permission.ExternalStorageRead);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DA] storage access request failed: " + e.Message);
+                SetStatus("couldn't open storage settings: " + e.Message);
+            }
+        }
+#endif
 
         // ---------- UI population ----------
         private void PopulateModels()
@@ -498,6 +641,32 @@ namespace DA
                 _liteTg.onValueChanged.AddListener(ApplyQuality);
                 y -= 36;
             }
+
+            // ----- assets folder selector: choose where the extracted data (audio/bundles) lives.
+            //       On Android the app-specific folder is hard to reach, so let the user point the app
+            //       at Download/ etc.; the choice is remembered (DAConfig → PlayerPrefs). -----
+            {
+                var hdr = Label(rt, "AssetsHdr", new Vector2(0, 1), new Vector2(1, 1),
+                    new Vector2(12, y), new Vector2(-12, 20), 13, TextAnchor.LowerLeft);
+                hdr.text = "Assets folder"; hdr.color = new Color(1f, 0.86f, 0.62f); hdr.fontStyle = FontStyle.Bold;
+                y -= 22;
+
+                _assetRootLabel = Label(rt, "AssetPath", new Vector2(0, 1), new Vector2(1, 1),
+                    new Vector2(12, y), new Vector2(-12, 34), 12, TextAnchor.UpperLeft);
+                _assetRootLabel.color = new Color(0.8f, 0.85f, 0.9f);
+                y -= 38;
+
+                _assetPick = new DAPicker(rt, _font, y, 30); y -= 36;
+                _assetPick.onChanged = ApplyAssetChoice;
+
+                _assetField = InputRow(rt, ref y, "custom folder path…");
+                Row2(rt, ref y, "Apply path", () => ApplyAssetPath(_assetField != null ? _assetField.text : null),
+                                "Reset", ResetAssetRoot);
+#if UNITY_ANDROID && !UNITY_EDITOR
+                Row1(rt, ref y, "Grant storage access", RequestStorageAccess);
+#endif
+            }
+
             _status = Label(rt, "Status", new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, y - 4), new Vector2(-12, 40), 13, TextAnchor.UpperLeft);
 
             rt.sizeDelta = new Vector2(380, -y + 44);
@@ -621,6 +790,35 @@ namespace DA
                 SetFonts(tg); toggleB = tg.GetComponent<Toggle>(); toggleB.isOn = false;
             }
             y -= 36;
+        }
+
+        // single full-width panel button
+        private void Row1(RectTransform parent, ref float y, string label, UnityEngine.Events.UnityAction onClick)
+        {
+            var b = DefaultControls.CreateButton(Res); b.transform.SetParent(parent, false);
+            var r = (RectTransform)b.transform;
+            r.anchorMin = new Vector2(0, 1); r.anchorMax = new Vector2(1, 1); r.pivot = new Vector2(0.5f, 1);
+            r.offsetMin = new Vector2(12, 0); r.offsetMax = new Vector2(-12, 0);
+            r.sizeDelta = new Vector2(r.sizeDelta.x, 30); r.anchoredPosition = new Vector2(r.anchoredPosition.x, y);
+            b.GetComponentInChildren<Text>().text = label; SetFonts(b);
+            b.GetComponent<Button>().onClick.AddListener(onClick);
+            y -= 36;
+        }
+
+        // full-width text entry (opens the native keyboard on mobile); dark text on the default light field
+        private InputField InputRow(RectTransform parent, ref float y, string placeholder)
+        {
+            var go = DefaultControls.CreateInputField(Res); go.transform.SetParent(parent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0, 1); r.anchorMax = new Vector2(1, 1); r.pivot = new Vector2(0.5f, 1);
+            r.offsetMin = new Vector2(12, 0); r.offsetMax = new Vector2(-12, 0);
+            r.sizeDelta = new Vector2(r.sizeDelta.x, 30); r.anchoredPosition = new Vector2(r.anchoredPosition.x, y);
+            SetFonts(go);
+            var f = go.GetComponent<InputField>();
+            if (f.textComponent != null) f.textComponent.color = new Color(0.1f, 0.1f, 0.13f);
+            if (f.placeholder is Text ph) { ph.text = placeholder; ph.color = new Color(0.4f, 0.4f, 0.45f); ph.fontStyle = FontStyle.Italic; }
+            y -= 36;
+            return f;
         }
 
         // game-style rounded translucent control button (white bg, dark bold text), laid out right→left
