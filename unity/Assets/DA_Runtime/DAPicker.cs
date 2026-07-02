@@ -128,6 +128,11 @@ namespace DA
             contentGO.transform.SetParent(vp.transform, false);
             _content = (RectTransform)contentGO.transform;
             _content.anchorMin = new Vector2(0, 1); _content.anchorMax = new Vector2(1, 1); _content.pivot = new Vector2(0.5f, 1);
+            // Normalize the horizontal size/position so Content == viewport width (height stays driven by
+            // the ContentSizeFitter). Otherwise a leftover sizeDelta.x makes Content overhang the viewport
+            // and the RectMask2D clips the LEFT of every row's text.
+            _content.sizeDelta = new Vector2(0f, _content.sizeDelta.y);
+            _content.anchoredPosition = new Vector2(0f, _content.anchoredPosition.y);
             var vlg = contentGO.GetComponent<VerticalLayoutGroup>();
             vlg.childControlWidth = true; vlg.childControlHeight = true; vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
             vlg.spacing = 2;
@@ -152,7 +157,8 @@ namespace DA
                 row.GetComponent<LayoutElement>().minHeight = 24; row.GetComponent<LayoutElement>().preferredHeight = 24;
                 row.GetComponent<Button>().onClick.AddListener(() => Select(idx));
                 var t = MkText(row.transform, _opts[i], TextAnchor.MiddleLeft);
-                ((RectTransform)t.transform).offsetMin = new Vector2(8, 0);
+                var trt = (RectTransform)t.transform;
+                trt.offsetMin = new Vector2(10, 0); trt.offsetMax = new Vector2(-8, 0);
             }
         }
     }

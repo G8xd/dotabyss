@@ -157,6 +157,11 @@ decoder by file extension (OGG/WAV).
 - The mosaic/censorship overlay drawables (`Mosaic*`) can be hidden via the player's mosaic
   toggle. This affects only the rendering of **your own local copy** of assets you already own;
   it distributes nothing.
+- The dialogue box can be hidden for an unobstructed view of the art via the **TEXT** button
+  (top bar) or the **H** key. The AUTO/SKIP/☰ controls stay visible, and taps still advance.
+- A **Lite (performance)** toggle (behind ☰) trades the cinematic look for speed — it drops
+  bloom and lowers the render scale. It defaults to **Lite on mobile / Full on desktop** and
+  the choice is remembered per device. Use Lite on low-end Android for a smoother experience.
 - See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the pipeline overview,
   [`docs/behavior_spec.md`](docs/behavior_spec.md) for the reverse-engineered playback behavior,
   and [`docs/history/TASKS.md`](docs/history/TASKS.md) for the build log.

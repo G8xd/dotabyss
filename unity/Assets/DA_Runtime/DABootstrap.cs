@@ -32,10 +32,14 @@ namespace DA
 
         private DAPicker _modelPick, _scenePick, _motionPick;
         private Text _sayWho, _sayText, _status;
-        private Toggle _mosaicTg, _aspectTg;
+        private Toggle _mosaicTg, _aspectTg, _liteTg;
         private bool _autoOn = true;
         private Image _fade;
         private CanvasGroup _dialogGroup;
+        private CanvasGroup _dialogUserGroup;  // user "hide text" toggle, composed over the scripted _dialogGroup
+        private bool _dialogHidden;
+        private Image _textBg;                  // TEXT button tint reflects shown/hidden
+        private Bloom _bloom;                   // toggled off in Lite quality (the big mobile cost)
         private GameObject _debugPanel, _uiRoot;
         private Text _diagText, _hintChevron;
         private Camera _bgCam;                 // clears the letterbox bars black behind the scene camera
@@ -57,6 +61,10 @@ namespace DA
             BuildEventSystem();
             BuildCanvas();
             BuildUI();
+
+            // Quality profile: Lite on mobile, Full on desktop; a saved choice overrides the default.
+            bool lite = PlayerPrefs.HasKey("da_lite") ? PlayerPrefs.GetInt("da_lite") == 1 : Application.isMobilePlatform;
+            ApplyQuality(lite);
 
             _stage = new GameObject("Stage").AddComponent<L2DStage>();
             _audio = new GameObject("Audio").AddComponent<AudioRouter>();
@@ -149,6 +157,35 @@ namespace DA
             float t = 0f;
             while (t < sec) { t += Time.deltaTime; _dialogGroup.alpha = Mathf.Lerp(start, target, t / sec); yield return null; }
             _dialogGroup.alpha = target;
+        }
+
+        // Manual "hide the dialogue box" toggle (H / TEXT button). Owns a separate CanvasGroup so it
+        // never fights the scripted `window` alpha on _dialogGroup; the AUTO/SKIP/☰ bar stays visible.
+        // Advancing is unaffected — AdvPlayer reads Input.* directly, not UI raycasts.
+        private void ToggleDialogue()
+        {
+            _dialogHidden = !_dialogHidden;
+            if (_dialogUserGroup != null)
+            {
+                _dialogUserGroup.alpha = _dialogHidden ? 0f : 1f;
+                _dialogUserGroup.blocksRaycasts = !_dialogHidden;
+            }
+            if (_textBg != null) _textBg.color = _dialogHidden ? UiIdle : UiActive;
+            SetStatus(_dialogHidden ? "dialogue hidden" : "dialogue shown");
+        }
+
+        // Runtime quality profile (no URP-asset regeneration): Lite drops bloom + render scale for
+        // low-end devices; Full keeps the cinematic look. Persisted so the choice sticks per device.
+        private void ApplyQuality(bool lite)
+        {
+            if (_bloom != null) _bloom.active = !lite;
+            var urp = (QualitySettings.renderPipeline ?? GraphicsSettings.defaultRenderPipeline)
+                      as UniversalRenderPipelineAsset;
+            if (urp != null) urp.renderScale = lite ? 0.7f : 1f;
+            Application.targetFrameRate = lite ? 30 : -1;   // Lite caps for battery/thermal; Full = platform default
+            PlayerPrefs.SetInt("da_lite", lite ? 1 : 0);
+            if (_liteTg != null) _liteTg.SetIsOnWithoutNotify(lite);
+            SetStatus(lite ? "quality: Lite (renderScale 0.7, no bloom)" : "quality: Full");
         }
 
         // ---------- engine actions ----------
@@ -295,8 +332,8 @@ namespace DA
             // The pink/punchy mood comes from SATURATION + colorFilter (no washout there). Brightness
             // and bloom are what blow bright skin/face highlights to white, so keep exposure neutral and
             // bloom on a high threshold + modest intensity → only true speculars glow, faces stay readable.
-            var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.Override(0.42f); bloom.threshold.Override(1.30f); bloom.scatter.Override(0.80f);
+            _bloom = profile.Add<Bloom>(true);
+            _bloom.intensity.Override(0.42f); _bloom.threshold.Override(1.30f); _bloom.scatter.Override(0.80f);
             var color = profile.Add<ColorAdjustments>(true);
             color.postExposure.Override(0.0f); color.contrast.Override(8f);
             color.colorFilter.Override(new Color(1.0f, 0.85f, 0.90f)); color.saturation.Override(22f);
@@ -334,10 +371,19 @@ namespace DA
             _contentRoot.anchorMin = Vector2.zero; _contentRoot.anchorMax = Vector2.one;
             _contentRoot.offsetMin = Vector2.zero; _contentRoot.offsetMax = Vector2.zero;
 
+            // ----- user "hide dialogue" wrapper: a full-rect CanvasGroup the TEXT toggle owns, composed
+            //       over the scripted _dialogGroup so a manual hide never fights the `window`/scene alpha. -----
+            var dlgWrapGO = new GameObject("DialogueWrap");
+            dlgWrapGO.transform.SetParent(_contentRoot, false);
+            var dlgWrapRT = dlgWrapGO.AddComponent<RectTransform>();
+            _dialogUserGroup = dlgWrapGO.AddComponent<CanvasGroup>();
+            dlgWrapRT.anchorMin = Vector2.zero; dlgWrapRT.anchorMax = Vector2.one;
+            dlgWrapRT.offsetMin = Vector2.zero; dlgWrapRT.offsetMax = Vector2.zero;
+
             // ----- dialogue (bottom): text floats over a soft bottom gradient with a glow outline,
             //       speaker above, left-positioned like the game. CanvasGroup = `window on/off`. -----
             var dlgGO = new GameObject("Dialogue");
-            dlgGO.transform.SetParent(_contentRoot, false);
+            dlgGO.transform.SetParent(dlgWrapGO.transform, false);
             _dialogGroup = dlgGO.AddComponent<CanvasGroup>();
             var dlgRT = dlgGO.AddComponent<RectTransform>();
             dlgRT.anchorMin = new Vector2(0, 0); dlgRT.anchorMax = new Vector2(1, 0);
@@ -365,8 +411,8 @@ namespace DA
             uiRT.anchorMin = new Vector2(0, 1); uiRT.anchorMax = new Vector2(1, 1);
             uiRT.offsetMin = new Vector2(0, -64); uiRT.offsetMax = new Vector2(0, -8);
 
-            var idle = new Color(1f, 1f, 1f, 0.72f);
-            var active = new Color(1f, 0.74f, 0.84f, 0.95f);
+            var idle = UiIdle;
+            var active = UiActive;
             float rx = -16; // from right edge
             GameButton(uiRT, "☰", ref rx, 54, () =>
             {
@@ -380,6 +426,9 @@ namespace DA
             Image autoBg; var autoBtn = GameButton(uiRT, "AUTO ▶", ref rx, 116, null, out autoBg);
             autoBg.color = active; _autoOn = true;
             autoBtn.onClick.AddListener(() => { _autoOn = !_autoOn; if (_player != null) _player.autoAdvance = _autoOn; autoBg.color = _autoOn ? active : idle; });
+            // TEXT: hide/show the dialogue box (stays visible when hidden, so it's the way back on touch)
+            GameButton(uiRT, "TEXT", ref rx, 96, ToggleDialogue, out _textBg);
+            _textBg.color = active;   // dialogue shown by default
 
             // ----- debug panel (pickers), hidden behind ☰ -----
             BuildDebugPanel();
@@ -404,7 +453,9 @@ namespace DA
         private void BuildDebugPanel()
         {
             _debugPanel = new GameObject("DebugPanel");
-            _debugPanel.transform.SetParent(_canvas.transform, false);
+            // Parent to the letterboxed content root (not the raw canvas) so the panel stays aligned
+            // with the top-bar controls; otherwise a top letterbox bar slides the bar down onto it.
+            _debugPanel.transform.SetParent(_contentRoot, false);
             var img = _debugPanel.AddComponent<Image>();
             img.color = new Color(0.1f, 0.1f, 0.13f, 0.94f);
             var rt = (RectTransform)_debugPanel.transform;
@@ -427,11 +478,26 @@ namespace DA
             });
             _motionPick = new DAPicker(rt, _font, y, 30); y -= 36;
             Row2(rt, ref y, "▶ Motion", PlaySelectedMotion, "Mosaic", null, out _mosaicTg);
+            StyleToggle(_mosaicTg, "Mosaic");
             _mosaicTg.onValueChanged.AddListener(on => { _stage.SetMosaic(on); SetStatus(on ? "mosaic on" : "uncensored"); });
             Row2(rt, ref y, "Fullscreen (F11)", ToggleFullscreen, "↻ Reload", () => { if (!string.IsNullOrEmpty(_stage.CurrentModel)) LoadModel(_stage.CurrentModel); });
             Row2(rt, ref y, "↺ Recenter", () => _stage.ReFrame(), "Lock Aspect", null, out _aspectTg);
+            StyleToggle(_aspectTg, "Lock Aspect");
             _aspectTg.SetIsOnWithoutNotify(true);   // default = locked to the game aspect (20:9)
             _aspectTg.onValueChanged.AddListener(on => { _stage.SetLockAspect(on); SetStatus(on ? "aspect: game (20:9)" : "aspect: free"); });
+            // performance profile toggle (full-width): Lite drops bloom + render scale for low-end devices.
+            // ApplyQuality() syncs its on-state (default set by platform in Start), so no SetIsOnWithoutNotify here.
+            {
+                var tg = DefaultControls.CreateToggle(Res); tg.transform.SetParent(rt, false);
+                var tgRT = (RectTransform)tg.transform;
+                tgRT.anchorMin = new Vector2(0, 1); tgRT.anchorMax = new Vector2(1, 1); tgRT.pivot = new Vector2(0.5f, 1);
+                tgRT.offsetMin = new Vector2(12, 0); tgRT.offsetMax = new Vector2(-12, 0);
+                tgRT.sizeDelta = new Vector2(tgRT.sizeDelta.x, 30); tgRT.anchoredPosition = new Vector2(tgRT.anchoredPosition.x, y);
+                _liteTg = tg.GetComponent<Toggle>();
+                StyleToggle(_liteTg, "Lite (performance)");
+                _liteTg.onValueChanged.AddListener(ApplyQuality);
+                y -= 36;
+            }
             _status = Label(rt, "Status", new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, y - 4), new Vector2(-12, 40), 13, TextAnchor.UpperLeft);
 
             rt.sizeDelta = new Vector2(380, -y + 44);
@@ -460,6 +526,9 @@ namespace DA
             if (Input.GetKeyDown(KeyCode.F11) ||
                 ((Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) && Input.GetKeyDown(KeyCode.Return)))
                 ToggleFullscreen();
+
+            // H hides/shows the dialogue box (the AUTO/SKIP/☰ bar stays); taps still advance.
+            if (Input.GetKeyDown(KeyCode.H)) ToggleDialogue();
 
             SyncContentRect();   // keep the in-frame UI inside the (possibly letterboxed) content rect
 
@@ -515,6 +584,9 @@ namespace DA
 
         // ---------- uGUI helpers ----------
         private static readonly DefaultControls.Resources Res = new DefaultControls.Resources();
+        // game-control button tints: idle (translucent white) vs active/on (warm pink)
+        private static readonly Color UiIdle = new Color(1f, 1f, 1f, 0.72f);
+        private static readonly Color UiActive = new Color(1f, 0.74f, 0.84f, 0.95f);
 
         private void Row2(RectTransform parent, ref float y, string a, UnityEngine.Events.UnityAction ca, string b, UnityEngine.Events.UnityAction cb)
         { Row2(parent, ref y, a, ca, b, cb, out _); }
@@ -623,6 +695,18 @@ namespace DA
                 t.font = _font;
                 if (t.fontSize < 16) t.fontSize = 18;
             }
+        }
+
+        // DefaultControls toggles ship with a dark label + dark checkmark → invisible on the dark panel.
+        // Make the label readable (white/bold) and the checkmark a bright fill so on/off is obvious.
+        private void StyleToggle(Toggle tg, string label)
+        {
+            if (tg == null) return;
+            SetFonts(tg.gameObject);
+            var lbl = tg.GetComponentInChildren<Text>(true);
+            if (lbl != null) { lbl.text = label; lbl.color = Color.white; lbl.fontStyle = FontStyle.Bold; lbl.fontSize = 15; }
+            if (tg.targetGraphic is Image box) box.color = new Color(0.82f, 0.82f, 0.88f, 1f);   // checkbox background
+            if (tg.graphic is Image check) check.color = new Color(0.20f, 0.78f, 0.36f, 1f);      // bright green tick when ON
         }
 
         // ---------- headless capture ----------
