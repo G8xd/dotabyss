@@ -1,0 +1,5 @@
+# Python deps for the da CLI / pipeline (Python 3.11+).
+#   pip install -r tools/requirements.txt
+UnityPy>=1.20        # read Unity AssetBundles (images, text, ACB, live2d)
+imageio-ffmpeg       # bundled ffmpeg for HCA->OGG audio decode/encode
+wannacri             # optional: USM video demux (da/extract_usm.py)

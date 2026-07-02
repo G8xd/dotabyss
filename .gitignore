@@ -1,0 +1,43 @@
+# --- generated / regenerable (re-created by the `da` CLI) ---
+/data/
+/build/
+
+# --- Unity (regenerated on open) ---
+/unity/Library/
+/unity/Temp/
+/unity/Logs/
+/unity/obj/
+/unity/UserSettings/
+/unity/.utmp/
+/unity/*.csproj
+/unity/*.sln
+
+# --- regenerable Unity assets (rebuilt by `da models` / `da unity setup`) ---
+# Models is ~3.2 GB of moc3/textures/clips/prefabs reconstructed from data/ — never commit it.
+/unity/Assets/Models/
+/unity/Assets/Models.meta
+/unity/Assets/StreamingAssets/scenes.json
+/unity/Assets/StreamingAssets/scenes.json.meta
+
+# --- logs / python caches ---
+*.log
+__pycache__/
+*.pyc
+*.pyo
+
+# --- python tooling (uv / ruff / ty caches, local venv) ---
+/.venv/
+.ruff_cache/
+.ty_cache/
+
+# --- local machine override (paths) ---
+/config.local.json
+
+# --- third-party tools & SDKs: NOT redistributed. Fetch per docs/README setup. ---
+# Live2D Cubism SDK for Unity (proprietary Core; download from live2d.com and drop in here).
+/unity/Assets/Live2D/
+# External datamining tools (AssetRipper, Cpp2IL, vgmstream, AssetStudioMod, ...).
+/tools/bin/
+
+# --- signing keys: never commit. Generate your own throwaway debug keystore (see README). ---
+/keystore/

@@ -1,0 +1,37 @@
+# Normalize line endings: text files stored as LF in the repo.
+* text=auto eol=lf
+
+# Windows batch files must stay CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Unity-serialized text assets (YAML) — treat as text, LF, and mark for better merges.
+*.unity   text eol=lf merge=unity
+*.prefab  text eol=lf merge=unity
+*.asset   text eol=lf merge=unity
+*.mat     text eol=lf merge=unity
+*.meta    text eol=lf
+*.controller text eol=lf merge=unity
+*.anim    text eol=lf
+
+# Binary formats — never touch (belt-and-suspenders; most are git-ignored anyway).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.tga  binary
+*.psd  binary
+*.moc3 binary
+*.wav  binary
+*.ogg  binary
+*.mp3  binary
+*.acb  binary
+*.awb  binary
+*.usm  binary
+*.bytes binary
+*.dll  binary
+*.so   binary
+*.dylib binary
+*.a    binary
+*.bundle binary
+*.exe  binary
+*.keystore binary

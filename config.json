@@ -1,0 +1,17 @@
+{
+  "_comment": "Single source of paths for the da CLI and the Unity project. Paths are relative to the repo root unless absolute. Copy to config.local.json to override per machine.",
+  "game": "data/game",
+  "extracted": "data/extracted",
+  "ripped": "data/ripped",
+  "bundles": "data/bundles",
+  "bundlesWin": "data/bundles_win",
+  "dump": "data/dump",
+  "unity": "unity",
+  "build": "build",
+  "unityExe": "C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Unity.exe",
+  "audio": {
+    "voiceQuality": 3,
+    "voiceMono": true,
+    "bgmSeQuality": 5
+  }
+}

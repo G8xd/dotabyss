@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in the pipeline or player isn't working
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Do not attach game assets or copyrighted material.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "Ran `da audio` and ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. `da extract`
+        2. `da audio`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Relevant console output or log snippet (redact any personal paths).
+      render: text
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Windows 11 / Ubuntu 24.04 / ..."
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Python, Unity, Cubism SDK, and the tool that failed (+ its version).
+      placeholder: "Python 3.11.9, Unity 6000.3.8f1, Cubism 5-r.5, AssetRipper x.y.z"
+    validations:
+      required: true
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have not attached any game assets or copyrighted content.
+          required: true

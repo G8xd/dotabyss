@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / discussion
+    url: https://github.com/G8xd/dotabyss/discussions
+    about: Ask usage questions or discuss ideas here (update the URL to your repo).

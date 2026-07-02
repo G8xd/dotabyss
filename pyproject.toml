@@ -1,0 +1,55 @@
+[project]
+name = "dotabyss-tools"
+version = "0.1.0"
+description = "Extraction/build pipeline and CLI for the Dot Abyss X native Live2D player."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+# Runtime dependencies for the `da` pipeline. Kept in sync with tools/requirements.txt
+# (that file remains for plain `pip install -r` users; this is the source of truth for uv).
+dependencies = [
+    "UnityPy>=1.20",   # read Unity AssetBundles (images, text, ACB, live2d)
+    "imageio-ffmpeg",  # bundled ffmpeg for HCA->OGG audio decode/encode
+    "wannacri",        # optional: USM video demux
+]
+
+# Dev tooling (Astral stack). Install with: `uv sync --group dev`
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "ty>=0.0.1a1",
+]
+
+# This repo is a collection of scripts, not an installable library: don't build/install
+# the root project, just manage its environment and dependencies.
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# First-party Python lives under tools/.
+src = ["tools"]
+extend-exclude = ["tools/bin", "data", "build", "unity"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# The small CLI/pipeline scripts favour a compact one-line style (grouped imports,
+# `if x: do()`, semicolon-separated setup) and set sys.path before importing daconfig.
+# Tolerate those stylistic choices; keep the substantive checks (unused/undefined names,
+# most bugbear rules, import sorting, modern-syntax upgrades).
+ignore = [
+    "E401",  # multiple imports on one line
+    "E402",  # module-level import not at top (sys.path setup first)
+    "E501",  # line length (handled by the formatter)
+    "E701",  # multiple statements on one line (colon)
+    "E702",  # multiple statements on one line (semicolon)
+    "E731",  # lambda assignment
+]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+include = ["tools"]
+exclude = ["tools/bin", "data", "build", "unity"]
